@@ -42,12 +42,18 @@ function parseReplyExactly(text: string): string | null {
   return m ? m[1] ?? "" : null;
 }
 
-function parsePikaE2eNonce(text: string): string | null {
+function parseE2ePingNonce(text: string): string | null {
   // Deterministic E2E test hook (no LLM):
-  //   inbound:  pika-e2e:<nonce>
-  //   reply:   pika-e2e-ack:<nonce>
+  //   inbound:  ping:<nonce>
+  //   reply:   pong:<nonce>
   //
   // Keep this intentionally strict so it doesn't trigger accidentally in normal chats.
+  const m = text.match(/^ping:([a-zA-Z0-9._-]{16,128})\s*$/);
+  return m ? m[1] ?? "" : null;
+}
+
+function parseLegacyPikaE2eNonce(text: string): string | null {
+  // Back-compat with older tests.
   const m = text.match(/^pika-e2e:([a-zA-Z0-9._-]{8,128})\s*$/);
   return m ? m[1] ?? "" : null;
 }
@@ -264,11 +270,11 @@ export const marmotPlugin: ChannelPlugin<ResolvedMarmotAccount> = {
             return;
           }
 
-          const pikaE2eNonce = parsePikaE2eNonce(ev.content);
-          if (pikaE2eNonce !== null) {
-            const ack = `pika-e2e-ack:${pikaE2eNonce}`;
+          const e2ePingNonce = parseE2ePingNonce(ev.content) ?? parseLegacyPikaE2eNonce(ev.content);
+          if (e2ePingNonce !== null) {
+            const ack = `pong:${e2ePingNonce}`;
             ctx.log?.info(
-              `[${resolved.accountId}] pika-e2e hook reply group=${ev.nostr_group_id} from=${ev.from_pubkey} nonce=${pikaE2eNonce}`,
+              `[${resolved.accountId}] e2e ping/pong hook reply group=${ev.nostr_group_id} from=${ev.from_pubkey} nonce=${e2ePingNonce}`,
             );
             await sidecar.sendMessage(ev.nostr_group_id, ack);
             return;
