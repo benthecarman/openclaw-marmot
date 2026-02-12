@@ -31,6 +31,7 @@ trap cleanup EXIT
 
 rm -rf "${STATE_DIR}"
 mkdir -p "${STATE_DIR}/relay/nostr-rs-relay-db"
+chmod 0777 "${STATE_DIR}/relay/nostr-rs-relay-db"
 
 cleanup
 docker pull "${RELAY_IMAGE}" >/dev/null
