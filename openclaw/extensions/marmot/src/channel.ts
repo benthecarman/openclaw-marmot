@@ -27,14 +27,19 @@ async function dispatchInboundToAgent(params: {
   chatId: string;
   senderId: string;
   text: string;
+  isOwner: boolean;
   deliverText: (text: string) => Promise<void>;
   log?: { error?: (msg: string) => void };
 }): Promise<void> {
-  const { runtime, accountId, chatId, senderId, text, deliverText } = params;
+  const { runtime, accountId, chatId, senderId, text, isOwner, deliverText } = params;
   const cfg = runtime.config.loadConfig();
 
-  // Minimal MsgContext shape (kept intentionally simple; we rely on OpenClaw's
-  // finalizeInboundContext + dispatch plumbing to normalize/fill derived fields).
+  // When the sender is the owner (in groupAllowFrom), treat as a DM so OpenClaw's
+  // core routing collapses it into the agent's main session. We omit SessionKey
+  // so resolveSessionKey() falls through to the main session key for non-group chats.
+  // For non-owner senders, keep the existing group-based session isolation.
+  const chatType = isOwner ? "dm" : "group";
+
   const ctx = {
     Body: text,
     RawBody: text,
@@ -42,13 +47,13 @@ async function dispatchInboundToAgent(params: {
     BodyForCommands: text,
     From: senderId,
     To: chatId,
-    SessionKey: `marmot:${accountId}:${chatId}`,
+    ...(isOwner ? {} : { SessionKey: `marmot:${accountId}:${chatId}` }),
     AccountId: accountId,
     Provider: "marmot",
     Surface: "marmot",
-    ChatType: "group",
+    ChatType: chatType,
     SenderId: senderId,
-    CommandAuthorized: true,
+    CommandAuthorized: isOwner,
   } as any;
 
   await runtime.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
@@ -133,7 +138,7 @@ function resolveSidecarArgs(cfgArgs?: string[] | null): string[] | null {
 export const marmotPlugin: ChannelPlugin<ResolvedMarmotAccount> = {
   id: "marmot",
   meta: {
-    id: "openclaw-marmot",
+    id: "marmot",
     label: "Marmot",
     selectionLabel: "Marmot (Rust)",
     docsPath: "/channels/marmot",
@@ -143,11 +148,11 @@ export const marmotPlugin: ChannelPlugin<ResolvedMarmotAccount> = {
     quickstartAllowFrom: true,
   },
   capabilities: {
-    chatTypes: ["group"],
+    chatTypes: ["dm", "group"],
     media: false,
     nativeCommands: false,
   },
-  reload: { configPrefixes: ["channels.marmot", "plugins.entries.openclaw-marmot"] },
+  reload: { configPrefixes: ["channels.marmot", "plugins.entries.marmot"] },
 
   config: {
     listAccountIds: (cfg) => listMarmotAccountIds(cfg),
@@ -216,6 +221,9 @@ export const marmotPlugin: ChannelPlugin<ResolvedMarmotAccount> = {
       }
       await handle.sidecar.sendMessage(groupId, text ?? "");
       return { channel: "marmot", to: groupId };
+    },
+    sendMedia: async () => {
+      throw new Error("marmot does not support media");
     },
   },
 
@@ -338,12 +346,15 @@ export const marmotPlugin: ChannelPlugin<ResolvedMarmotAccount> = {
           }
 
           try {
+            const senderPk = String(ev.from_pubkey).trim().toLowerCase();
+            const senderIsOwner = groupAllowFrom.length > 0 && groupAllowFrom.includes(senderPk);
             await dispatchInboundToAgent({
               runtime,
               accountId: resolved.accountId,
               senderId: ev.from_pubkey,
               chatId: ev.nostr_group_id,
               text: ev.content,
+              isOwner: senderIsOwner,
               deliverText: async (responseText: string) => {
                 await sidecar.sendMessage(ev.nostr_group_id, responseText);
               },
