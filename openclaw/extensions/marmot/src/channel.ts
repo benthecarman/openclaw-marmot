@@ -222,6 +222,9 @@ export const marmotPlugin: ChannelPlugin<ResolvedMarmotAccount> = {
       await handle.sidecar.sendMessage(groupId, text ?? "");
       return { channel: "marmot", to: groupId };
     },
+    sendMedia: async () => {
+      throw new Error("marmot does not support media");
+    },
   },
 
   gateway: {
