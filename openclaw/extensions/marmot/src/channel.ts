@@ -735,6 +735,9 @@ export const marmotPlugin: ChannelPlugin<ResolvedMarmotAccount> = {
                 groupName: groupNames.get(groupId),
                 stateDir: baseStateDir,
                 deliverText: async (responseText: string) => {
+                  ctx.log?.info(
+                    `[${resolved.accountId}] send group=${ev.nostr_group_id} len=${responseText.length}`,
+                  );
                   await sidecar.sendMessage(ev.nostr_group_id, responseText);
                 },
                 log: ctx.log,
@@ -750,6 +753,9 @@ export const marmotPlugin: ChannelPlugin<ResolvedMarmotAccount> = {
                 isOwner: senderIsOwner,
                 isGroupChat: false,
                 deliverText: async (responseText: string) => {
+                  ctx.log?.info(
+                    `[${resolved.accountId}] send dm=${ev.nostr_group_id} len=${responseText.length}`,
+                  );
                   await sidecar.sendMessage(ev.nostr_group_id, responseText);
                 },
                 log: ctx.log,

@@ -182,7 +182,6 @@ export class MarmotSidecar {
   }
 
   async sendMessage(nostrGroupId: string, content: string): Promise<void> {
-    getMarmotRuntime().logger?.info(`[marmotd] send group=${nostrGroupId} len=${content.length}`);
     await this.request({ cmd: "send_message", nostr_group_id: nostrGroupId, content } as any);
   }
 
